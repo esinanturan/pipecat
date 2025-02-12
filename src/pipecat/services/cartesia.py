@@ -43,7 +43,7 @@ except ModuleNotFoundError as e:
     raise Exception(f"Missing module: {e}")
 
 
-def language_to_cartesia_language(language: Language) -> str | None:
+def language_to_cartesia_language(language: Language) -> Optional[str]:
     BASE_LANGUAGES = {
         Language.DE: "de",
         Language.EN: "en",
@@ -88,8 +88,8 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
         voice_id: str,
         cartesia_version: str = "2024-06-10",
         url: str = "wss://api.cartesia.ai/tts/websocket",
-        model: str = "sonic-english",
-        sample_rate: int = 24000,
+        model: str = "sonic",
+        sample_rate: Optional[int] = None,
         encoding: str = "pcm_s16le",
         container: str = "raw",
         params: InputParams = InputParams(),
@@ -121,7 +121,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
             "output_format": {
                 "container": container,
                 "encoding": encoding,
-                "sample_rate": sample_rate,
+                "sample_rate": 0,
             },
             "language": self.language_to_service_language(params.language)
             if params.language
@@ -143,7 +143,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
         await super().set_model(model)
         logger.info(f"Switching TTS model to: [{model}]")
 
-    def language_to_service_language(self, language: Language) -> str | None:
+    def language_to_service_language(self, language: Language) -> Optional[str]:
         return language_to_cartesia_language(language)
 
     def _build_msg(
@@ -174,6 +174,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
 
     async def start(self, frame: StartFrame):
         await super().start(frame)
+        self._settings["output_format"]["sample_rate"] = self.sample_rate
         await self._connect()
 
     async def stop(self, frame: EndFrame):
@@ -187,16 +188,13 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
     async def _connect(self):
         await self._connect_websocket()
 
-        self._receive_task = self.get_event_loop().create_task(
-            self._receive_task_handler(self.push_error)
-        )
+        self._receive_task = self.create_task(self._receive_task_handler(self.push_error))
 
     async def _disconnect(self):
         await self._disconnect_websocket()
 
         if self._receive_task:
-            self._receive_task.cancel()
-            await self._receive_task
+            await self.cancel_task(self._receive_task)
             self._receive_task = None
 
     async def _connect_websocket(self):
@@ -238,7 +236,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
     async def flush_audio(self):
         if not self._context_id or not self._websocket:
             return
-        logger.trace("Flushing audio")
+        logger.trace(f"{self}: flushing audio")
         msg = self._build_msg(text="", continue_transcript=False)
         await self._websocket.send(msg)
 
@@ -265,7 +263,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
                 self.start_word_timestamps()
                 frame = TTSAudioRawFrame(
                     audio=base64.b64decode(msg["data"]),
-                    sample_rate=self._settings["output_format"]["sample_rate"],
+                    sample_rate=self.sample_rate,
                     num_channels=1,
                 )
                 await self.push_frame(frame)
@@ -273,7 +271,7 @@ class CartesiaTTSService(WordTTSService, WebsocketService):
                 logger.error(f"{self} error: {msg}")
                 await self.push_frame(TTSStoppedFrame())
                 await self.stop_all_metrics()
-                await self.push_error(ErrorFrame(f'{self} error: {msg["error"]}'))
+                await self.push_error(ErrorFrame(f"{self} error: {msg['error']}"))
             else:
                 logger.error(f"{self} error, unknown message type: {msg}")
 
@@ -329,9 +327,9 @@ class CartesiaHttpTTSService(TTSService):
         *,
         api_key: str,
         voice_id: str,
-        model: str = "sonic-english",
+        model: str = "sonic",
         base_url: str = "https://api.cartesia.ai",
-        sample_rate: int = 24000,
+        sample_rate: Optional[int] = None,
         encoding: str = "pcm_s16le",
         container: str = "raw",
         params: InputParams = InputParams(),
@@ -344,7 +342,7 @@ class CartesiaHttpTTSService(TTSService):
             "output_format": {
                 "container": container,
                 "encoding": encoding,
-                "sample_rate": sample_rate,
+                "sample_rate": 0,
             },
             "language": self.language_to_service_language(params.language)
             if params.language
@@ -360,8 +358,12 @@ class CartesiaHttpTTSService(TTSService):
     def can_generate_metrics(self) -> bool:
         return True
 
-    def language_to_service_language(self, language: Language) -> str | None:
+    def language_to_service_language(self, language: Language) -> Optional[str]:
         return language_to_cartesia_language(language)
+
+    async def start(self, frame: StartFrame):
+        await super().start(frame)
+        self._settings["output_format"]["sample_rate"] = self.sample_rate
 
     async def stop(self, frame: EndFrame):
         await super().stop(frame)
@@ -397,9 +399,7 @@ class CartesiaHttpTTSService(TTSService):
             )
 
             frame = TTSAudioRawFrame(
-                audio=output["audio"],
-                sample_rate=self._settings["output_format"]["sample_rate"],
-                num_channels=1,
+                audio=output["audio"], sample_rate=self.sample_rate, num_channels=1
             )
             yield frame
         except Exception as e:

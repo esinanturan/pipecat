@@ -9,13 +9,13 @@ import os
 import uuid
 import wave
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 from loguru import logger
 
 from pipecat.frames.frames import CancelFrame, EndFrame, Frame
-from pipecat.processors.audio import audio_buffer_processor
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.ai_services import AIService
@@ -69,6 +69,7 @@ class CanonicalMetricsService(AIService):
         api_url: str = "https://voiceapp.canonical.chat/api/v1",
         assistant_speaks_first: bool = True,
         output_dir: str = "recordings",
+        context: Optional[OpenAILLMContext] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -80,6 +81,7 @@ class CanonicalMetricsService(AIService):
         self._assistant = assistant
         self._assistant_speaks_first = assistant_speaks_first
         self._output_dir = output_dir
+        self._context = context
 
     async def stop(self, frame: EndFrame):
         await super().stop(frame)
@@ -115,7 +117,6 @@ class CanonicalMetricsService(AIService):
         try:
             await self._multipart_upload(filename)
             await aiofiles.os.remove(filename)
-            audio_buffer_processor.reset_audio_buffers()
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -190,6 +191,9 @@ class CanonicalMetricsService(AIService):
             "callId": self._call_id,
             "assistant": {"id": self._assistant, "speaksFirst": self._assistant_speaks_first},
         }
+        if self._context is not None:
+            params["transcript"] = self._context.messages
+
         logger.debug(f"Completing upload for {params['filename']}")
         logger.debug(f"Slug: {params['slug']}")
         response = await self._aiohttp_session.post(

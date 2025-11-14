@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updated all STT and TTS services to use consistent error handling pattern with
+  `push_error()` method for better pipeline error event integration.
+
 - Added Hindi support for Rime TTS services.
 
 - Updated `GeminiTTSService` to use Google Cloud Text-to-Speech streaming API
@@ -50,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `keyterm` or `tag` containing a space.
 
 - Prevented `HeyGenVideoService` from automatically disconnecting after 5 minutes.
+
+### Added
+
+- Added ai-coustics integrated VAD (`AICVADAnalyzer`) with `AICFilter` factory and 
+  example wiring; leverages the enhancement model for robust detection with no 
+  ONNX dependency or added processing complexity.
 
 ## [0.0.94] - 2025-11-10
 

@@ -51,42 +51,6 @@ def default_user_turn_stop_strategies() -> list[BaseUserTurnStopStrategy]:
     return [TurnAnalyzerUserTurnStopStrategy(turn_analyzer=LocalSmartTurnAnalyzerV3())]
 
 
-def llm_completion_user_turn_stop_strategies(
-    strategies: list[BaseUserTurnStopStrategy] | None = None,
-    *,
-    config: UserTurnCompletionConfig | None = None,
-) -> list[BaseUserTurnStopStrategy]:
-    """Build a stop-strategy list gated on the LLM's turn-completion verdict.
-
-    Wraps ``strategies`` with :func:`deferred` so they trigger inference
-    but don't fire ``on_user_turn_stopped`` themselves, then appends
-    :class:`~pipecat.turns.user_stop.LLMTurnCompletionUserTurnStopStrategy`
-    as the finalizer. Use as the ``stop`` field of a
-    :class:`UserTurnStrategies`::
-
-        UserTurnStrategies(
-            stop=llm_completion_user_turn_stop_strategies(),
-        )
-
-    Args:
-        strategies: Stop strategies that should drive inference. If
-            None, uses :func:`default_user_turn_stop_strategies`.
-        config: Optional configuration applied to the LLM via the
-            ``filter_incomplete_user_turns`` setting. Customizes the
-            turn-completion instructions, incomplete-turn timeouts, and
-            re-prompts.
-
-    Returns:
-        ``[deferred(s) for s in strategies] +
-        [LLMTurnCompletionUserTurnStopStrategy(config=config)]``.
-    """
-    strategies = strategies if strategies is not None else default_user_turn_stop_strategies()
-    return [
-        *(deferred(s) for s in strategies),
-        LLMTurnCompletionUserTurnStopStrategy(config=config),
-    ]
-
-
 @dataclass
 class UserTurnStrategies:
     """Container for user turn start and stop strategies.
@@ -134,3 +98,57 @@ class ExternalUserTurnStrategies(UserTurnStrategies):
     def __post_init__(self):
         self.start = [ExternalUserTurnStartStrategy()]
         self.stop = [ExternalUserTurnStopStrategy()]
+
+
+@dataclass
+class FilterIncompleteUserTurnStrategies(UserTurnStrategies):
+    """Stop strategies gated on the LLM's turn-completion verdict.
+
+    The LLM is asked to begin every response with one of three markers:
+    ✓ (complete), ○ (incomplete short), or ◐ (incomplete long). Only ✓
+    finalizes the user turn; ○ / ◐ keep the turn open so the user can
+    continue speaking and the LLM can re-evaluate later.
+
+    Configuring strategies this way preserves the existing detector
+    chain (defaults or user-supplied) for inference triggering and
+    appends :class:`~pipecat.turns.user_stop.LLMTurnCompletionUserTurnStopStrategy`
+    as the finalizer. The detector strategies are wrapped with
+    :func:`~pipecat.turns.user_stop.deferred` automatically so they fire
+    only ``on_user_turn_inference_triggered`` and leave finalization to
+    the LLM gate.
+
+    Parameters:
+        config: Optional configuration applied to the LLM via the
+            ``filter_incomplete_user_turns`` setting. Customizes the
+            turn-completion instructions, incomplete-turn timeouts, and
+            re-prompts. If None, defaults from
+            :class:`~pipecat.turns.user_turn_completion_mixin.UserTurnCompletionConfig`
+            are used.
+
+    Example::
+
+        user_turn_strategies=FilterIncompleteUserTurnStrategies()
+
+        # Custom detector chain:
+        user_turn_strategies=FilterIncompleteUserTurnStrategies(
+            stop=[SpeechTimeoutUserTurnStopStrategy(...)],
+        )
+
+        # Custom completion config:
+        user_turn_strategies=FilterIncompleteUserTurnStrategies(
+            config=UserTurnCompletionConfig(
+                incomplete_short_timeout=5.0,
+                incomplete_long_timeout=15.0,
+            ),
+        )
+    """
+
+    config: UserTurnCompletionConfig | None = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Defer the detector chain so it only fires inference-triggered,
+        # then append the LLM gate as the sole finalizer.
+        gated: list[BaseUserTurnStopStrategy] = [deferred(s) for s in self.stop or []]
+        gated.append(LLMTurnCompletionUserTurnStopStrategy(config=self.config))
+        self.stop = gated

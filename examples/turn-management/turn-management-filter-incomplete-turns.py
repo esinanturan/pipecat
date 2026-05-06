@@ -41,10 +41,7 @@ from pipecat.services.openai.llm import OpenAILLMService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.daily.transport import DailyParams
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
-from pipecat.turns.user_turn_strategies import (
-    UserTurnStrategies,
-    llm_completion_user_turn_stop_strategies,
-)
+from pipecat.turns.user_turn_strategies import FilterIncompleteUserTurnStrategies
 
 load_dotenv(override=True)
 
@@ -87,11 +84,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     )
 
     context = LLMContext()
-    # `llm_completion_user_turn_stop_strategies()` pairs the default
-    # stop strategies with `LLMTurnCompletionUserTurnStopStrategy`:
-    # those strategies trigger LLM inference but the public
-    # `on_user_turn_stopped` event fires only when the LLM confirms ✓.
-    # The LLM marks each response with one of:
+    # `FilterIncompleteUserTurnStrategies` pairs the default detector
+    # chain with `LLMTurnCompletionUserTurnStopStrategy`: detectors
+    # trigger LLM inference but the public `on_user_turn_stopped` event
+    # fires only when the LLM confirms ✓. The LLM marks each response
+    # with one of:
     # ✓ = complete (respond normally)
     # ○ = incomplete short (wait 5s, then prompt)
     # ◐ = incomplete long (wait 15s, then prompt)
@@ -99,17 +96,14 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         context,
         user_params=LLMUserAggregatorParams(
             vad_analyzer=SileroVADAnalyzer(),
-            user_turn_strategies=UserTurnStrategies(
-                stop=llm_completion_user_turn_stop_strategies(),
+            user_turn_strategies=FilterIncompleteUserTurnStrategies(
                 # Optional: customize turn completion behavior
-                # stop=llm_completion_user_turn_stop_strategies(
-                #     config=UserTurnCompletionConfig(
-                #         incomplete_short_timeout=5.0,
-                #         incomplete_long_timeout=15.0,
-                #         incomplete_short_prompt="Custom prompt...",
-                #         incomplete_long_prompt="Custom prompt...",
-                #         instructions="Custom turn completion instructions...",
-                #     ),
+                # config=UserTurnCompletionConfig(
+                #     incomplete_short_timeout=5.0,
+                #     incomplete_long_timeout=15.0,
+                #     incomplete_short_prompt="Custom prompt...",
+                #     incomplete_long_prompt="Custom prompt...",
+                #     instructions="Custom turn completion instructions...",
                 # ),
             ),
         ),

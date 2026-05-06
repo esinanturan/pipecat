@@ -64,7 +64,10 @@ from pipecat.turns.user_mute import (
     MuteUntilFirstBotCompleteUserMuteStrategy,
 )
 from pipecat.turns.user_stop import SpeechTimeoutUserTurnStopStrategy
-from pipecat.turns.user_turn_strategies import UserTurnStrategies
+from pipecat.turns.user_turn_strategies import (
+    FilterIncompleteUserTurnStrategies,
+    UserTurnStrategies,
+)
 from pipecat.utils.text.base_text_aggregator import AggregationType
 
 USER_TURN_STOP_TIMEOUT = 0.2
@@ -179,15 +182,9 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
         assert context.messages[0]["content"] == "Hi there!"
 
     async def test_llm_messages_update_does_not_inject_turn_completion_into_context(self):
-        from pipecat.turns.user_turn_strategies import (
-            llm_completion_user_turn_stop_strategies,
-        )
-
         context = LLMContext()
         params = LLMUserAggregatorParams(
-            user_turn_strategies=UserTurnStrategies(
-                stop=llm_completion_user_turn_stop_strategies(),
-            ),
+            user_turn_strategies=FilterIncompleteUserTurnStrategies(),
         )
         pipeline = Pipeline([LLMUserAggregator(context, params=params)])
 

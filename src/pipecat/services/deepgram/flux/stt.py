@@ -390,6 +390,7 @@ class DeepgramFluxSTTService(DeepgramFluxSTTBase, WebsocketService):
 
         try:
             self._last_stt_time = time.monotonic()
+            self._last_audio_chunk_duration = len(audio) / (self.sample_rate * 2)
             await self.send_with_retry(audio, self._report_error)
         except Exception as e:
             yield ErrorFrame(error=f"Unknown error occurred: {e}")

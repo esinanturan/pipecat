@@ -245,6 +245,7 @@ class DeepgramFluxSageMakerSTTService(DeepgramFluxSTTBase):
         if self._client and self._client.is_active:
             try:
                 self._last_stt_time = time.monotonic()
+                self._last_audio_chunk_duration = len(audio) / (self.sample_rate * 2)
                 await self._client.send_audio_chunk(audio)
             except Exception as e:
                 yield ErrorFrame(error=f"Unknown error occurred: {e}")

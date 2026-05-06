@@ -191,6 +191,7 @@ class DeepgramFluxSTTBase(STTService):
         self._last_stt_time: float | None = None
         self._watchdog_task: asyncio.Task | None = None
         self._user_is_speaking = False
+        self._last_audio_chunk_duration: float = 0.0
 
         # Flux event handlers
         self._register_event_handler("on_start_of_turn")
@@ -291,9 +292,11 @@ class DeepgramFluxSTTBase(STTService):
         """
         while self._transport_is_active():
             now = time.monotonic()
-            # More than 500 ms without sending new audio to Flux
-            if self._user_is_speaking and self._last_stt_time and now - self._last_stt_time > 0.5:
-                logger.warning("Sending silence to Flux to prevent dangling task")
+            # Send silence if we go more than 500 ms or twice the chunk size
+            # without sending new audio to Flux.
+            threshold = max(self._last_audio_chunk_duration * 2, 0.5)
+            if self._user_is_speaking and self._last_stt_time and now - self._last_stt_time > threshold:
+                logger.warning(f"No audio received for {threshold * 1000:.0f} ms. Sending silence to Flux to prevent a dangling task")
                 try:
                     await self._send_silence()
                 except Exception as e:

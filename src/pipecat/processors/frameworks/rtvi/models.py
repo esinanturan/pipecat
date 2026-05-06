@@ -20,7 +20,7 @@ from typing import (
     Literal,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from pipecat.frames.frames import (
     AggregationType,
@@ -617,18 +617,91 @@ class UICommandData(BaseModel):
     payload: Any | None = None
 
 
+class A11yNode(BaseModel):
+    """One node in the UI accessibility snapshot tree.
+
+    Mirrors the client-side ``A11yNode`` wire shape. Extra fields are
+    allowed so clients can add platform-specific or future metadata
+    without breaking older servers.
+
+    Parameters:
+        ref: Stable client-assigned element reference.
+        role: ARIA-style role for the node.
+        name: Optional accessible name.
+        value: Optional current value for inputs/progress/etc.
+        state: Optional short state tags (e.g. ``"focused"``,
+            ``"disabled"``, ``"offscreen"``).
+        level: Optional heading level.
+        colcount: Optional column count for grid-like containers.
+        rowcount: Optional row count for grid-like containers.
+        children: Optional child nodes.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    ref: str
+    role: str
+    name: str | None = None
+    value: str | None = None
+    state: list[str] | None = None
+    level: int | None = None
+    colcount: int | None = None
+    rowcount: int | None = None
+    children: list["A11yNode"] | None = None
+
+
+class A11ySelection(BaseModel):
+    """The user's current text selection in the UI snapshot.
+
+    Extra fields are allowed for forward compatibility with client
+    snapshot additions.
+
+    Parameters:
+        ref: Ref of the element that carries the selection.
+        text: Selected text.
+        start_offset: Optional selection start offset.
+        end_offset: Optional selection end offset.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    ref: str
+    text: str
+    start_offset: int | None = None
+    end_offset: int | None = None
+
+
+class A11ySnapshot(BaseModel):
+    """Client accessibility snapshot sent in a ``ui-snapshot`` message.
+
+    Mirrors the client-side ``A11ySnapshot`` wire shape. Extra fields
+    are allowed so clients can add compatible metadata over time.
+
+    Parameters:
+        root: Root accessibility node.
+        captured_at: Client-side epoch milliseconds when captured.
+        selection: Optional current text selection.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    root: A11yNode
+    captured_at: int
+    selection: A11ySelection | None = None
+
+
 class UISnapshotData(BaseModel):
     """Inner ``data`` for a ``ui-snapshot`` message.
 
-    The accessibility snapshot tree is opaque on the server side.
-    The client owns its shape; the server stores it as-is for
-    rendering into the LLM context.
+    The accessibility snapshot tree mirrors the client-side
+    ``A11ySnapshot`` wire shape and is kept forward-compatible by
+    allowing extra fields on the snapshot models.
 
     Parameters:
         tree: The serialized accessibility tree.
     """
 
-    tree: Any | None = None
+    tree: A11ySnapshot
 
 
 class UICancelTaskData(BaseModel):

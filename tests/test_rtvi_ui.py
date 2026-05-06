@@ -19,6 +19,9 @@ from pipecat.processors.frameworks.rtvi.frames import (
     RTVIUIEventFrame,
 )
 from pipecat.processors.frameworks.rtvi.models import (
+    A11yNode,
+    A11ySelection,
+    A11ySnapshot,
     Click,
     Focus,
     Highlight,
@@ -72,16 +75,100 @@ class TestEnvelopeMessages(unittest.TestCase):
         )
 
     def test_ui_snapshot_envelope(self):
-        msg = UISnapshotMessage(id="m2", data=UISnapshotData(tree={"root": "..."}))
+        msg = UISnapshotMessage(
+            id="m2",
+            data=UISnapshotData(
+                tree=A11ySnapshot(
+                    root=A11yNode(
+                        ref="e1",
+                        role="main",
+                        children=[A11yNode(ref="e2", role="button", name="Save")],
+                    ),
+                    captured_at=42,
+                    selection=A11ySelection(ref="e2", text="Save", start_offset=0, end_offset=4),
+                )
+            ),
+        )
         self.assertEqual(
             msg.model_dump(),
             {
                 "label": "rtvi-ai",
                 "type": "ui-snapshot",
                 "id": "m2",
-                "data": {"tree": {"root": "..."}},
+                "data": {
+                    "tree": {
+                        "root": {
+                            "ref": "e1",
+                            "role": "main",
+                            "name": None,
+                            "value": None,
+                            "state": None,
+                            "level": None,
+                            "colcount": None,
+                            "rowcount": None,
+                            "children": [
+                                {
+                                    "ref": "e2",
+                                    "role": "button",
+                                    "name": "Save",
+                                    "value": None,
+                                    "state": None,
+                                    "level": None,
+                                    "colcount": None,
+                                    "rowcount": None,
+                                    "children": None,
+                                }
+                            ],
+                        },
+                        "captured_at": 42,
+                        "selection": {
+                            "ref": "e2",
+                            "text": "Save",
+                            "start_offset": 0,
+                            "end_offset": 4,
+                        },
+                    }
+                },
             },
         )
+
+    def test_ui_snapshot_allows_future_client_fields(self):
+        msg = UISnapshotMessage.model_validate(
+            {
+                "id": "m2",
+                "data": {
+                    "tree": {
+                        "root": {
+                            "ref": "e1",
+                            "role": "main",
+                            "bounds": {"x": 1, "y": 2},
+                            "children": [
+                                {
+                                    "ref": "e2",
+                                    "role": "button",
+                                    "name": "Save",
+                                    "platform_state": {"pressed": False},
+                                }
+                            ],
+                        },
+                        "captured_at": 42,
+                        "selection": {
+                            "ref": "e2",
+                            "text": "Save",
+                            "direction": "forward",
+                        },
+                        "viewport": {"width": 1024, "height": 768},
+                    }
+                },
+            }
+        )
+
+        dumped = msg.model_dump()
+        tree = dumped["data"]["tree"]
+        self.assertEqual(tree["root"]["bounds"], {"x": 1, "y": 2})
+        self.assertEqual(tree["root"]["children"][0]["platform_state"], {"pressed": False})
+        self.assertEqual(tree["selection"]["direction"], "forward")
+        self.assertEqual(tree["viewport"], {"width": 1024, "height": 768})
 
     def test_ui_cancel_task_envelope(self):
         msg = UICancelTaskMessage(id="m3", data=UICancelTaskData(task_id="t-99", reason="user"))

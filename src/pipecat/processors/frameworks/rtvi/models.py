@@ -595,11 +595,11 @@ class UIEventData(BaseModel):
     """Inner ``data`` for a ``ui-event`` message.
 
     Parameters:
-        name: App-defined event name.
+        event: App-defined event.
         payload: App-defined payload, schemaless by design.
     """
 
-    name: str
+    event: str
     payload: Any | None = None
 
 
@@ -607,13 +607,13 @@ class UICommandData(BaseModel):
     """Inner ``data`` for a ``ui-command`` message.
 
     Parameters:
-        name: App-defined command name.
+        command: App-defined command.
         payload: App-defined payload (already a plain dict by the
-            time it lands on the wire). The standard payload models
+            time it lands on the wire). The standard command payload models
             below produce the right shape via ``model_dump()``.
     """
 
-    name: str
+    command: str
     payload: Any | None = None
 
 

@@ -434,7 +434,7 @@ class RTVIObserver(BaseObserver):
             await self.send_rtvi_message(message)
         elif isinstance(frame, RTVIUICommandFrame):
             message = RTVI.UICommandMessage(
-                data=RTVI.UICommandData(name=frame.command_name, payload=frame.payload)
+                data=RTVI.UICommandData(command=frame.command, payload=frame.payload)
             )
             await self.send_rtvi_message(message)
         elif isinstance(frame, RTVIUITaskFrame):

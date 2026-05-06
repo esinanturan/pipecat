@@ -33,28 +33,26 @@ class RTVIUICommandFrame(SystemFrame):
     """A frame for sending a UI command to the client.
 
     Pipeline-side counterpart of the ``ui-command`` RTVI message.
-    The observer wraps the ``command_name`` + ``payload`` into a
+    The observer wraps the ``command`` + ``payload`` into a
     ``UICommandMessage`` envelope before pushing it to the transport,
     so the wire shape is:
-    ``{label, type: "ui-command", data: {name, payload}}``.
+    ``{label, type: "ui-command", data: {command, payload}}``.
 
     Parameters:
-        command_name: App-defined command name (e.g. ``"toast"``,
-            ``"navigate"``, or any app-specific name). The wire
-            field is ``data.name``; this avoids shadowing
-            ``SystemFrame.name`` (the per-instance debug label).
+        command: App-defined command (e.g. ``"toast"``,
+            ``"navigate"``, or any app-specific command).
         payload: App-defined payload. Pydantic command models
             (``Toast``, ``Navigate``, ``ScrollTo``, ...) should be
             converted to a plain dict via ``model_dump()`` before
             being placed here; an arbitrary dict works as well.
     """
 
-    command_name: str = ""
+    command: str = ""
     payload: Any = None
 
     def __str__(self):
         """String representation of the UI command frame."""
-        return f"{self.name}(command: {self.command_name})"
+        return f"{self.name}(command: {self.command})"
 
 
 @dataclass
@@ -97,17 +95,17 @@ class RTVIUIEventFrame(SystemFrame):
 
     Parameters:
         msg_id: The RTVI message id, as set by the client.
-        event_name: App-defined event name (the ``data.name`` field).
+        event: App-defined event (the ``data.event`` field).
         payload: App-defined payload (the ``data.payload`` field).
     """
 
     msg_id: str = ""
-    event_name: str = ""
+    event: str = ""
     payload: Any = None
 
     def __str__(self):
         """String representation of the UI event frame."""
-        return f"{self.name}(event: {self.event_name})"
+        return f"{self.name}(event: {self.event})"
 
 
 @dataclass

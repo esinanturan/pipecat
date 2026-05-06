@@ -14,6 +14,10 @@ with existing client code, and we want a test that fails loudly.
 
 import unittest
 
+from pipecat.processors.frameworks.rtvi.frames import (
+    RTVIUICommandFrame,
+    RTVIUIEventFrame,
+)
 from pipecat.processors.frameworks.rtvi.models import (
     Click,
     Focus,
@@ -43,27 +47,27 @@ class TestEnvelopeMessages(unittest.TestCase):
     """Pin the on-the-wire envelope shapes for each first-class UI message."""
 
     def test_ui_event_envelope(self):
-        msg = UIEventMessage(id="m1", data=UIEventData(name="nav_click", payload={"view": "home"}))
+        msg = UIEventMessage(id="m1", data=UIEventData(event="nav_click", payload={"view": "home"}))
         self.assertEqual(
             msg.model_dump(),
             {
                 "label": "rtvi-ai",
                 "type": "ui-event",
                 "id": "m1",
-                "data": {"name": "nav_click", "payload": {"view": "home"}},
+                "data": {"event": "nav_click", "payload": {"view": "home"}},
             },
         )
 
     def test_ui_command_envelope_no_id(self):
         # Server-to-client push: no id field on the envelope (matches
         # ServerMessage / LLMFunctionCallMessage shape).
-        msg = UICommandMessage(data=UICommandData(name="toast", payload={"title": "Saved"}))
+        msg = UICommandMessage(data=UICommandData(command="toast", payload={"title": "Saved"}))
         self.assertEqual(
             msg.model_dump(),
             {
                 "label": "rtvi-ai",
                 "type": "ui-command",
-                "data": {"name": "toast", "payload": {"title": "Saved"}},
+                "data": {"command": "toast", "payload": {"title": "Saved"}},
             },
         )
 
@@ -185,6 +189,21 @@ class TestPayloadShapes(unittest.TestCase):
         payload = dict(SelectText(ref="e15"))
         self.assertIsNone(payload["start_offset"])
         self.assertIsNone(payload["end_offset"])
+
+
+class TestFrames(unittest.TestCase):
+    """Pin the frame API for named UI messages."""
+
+    def test_ui_command_frame_names_command_and_payload(self):
+        frame = RTVIUICommandFrame(command="toast", payload={"title": "Saved"})
+        self.assertEqual(frame.command, "toast")
+        self.assertEqual(frame.payload, {"title": "Saved"})
+
+    def test_ui_event_frame_names_event_and_payload(self):
+        frame = RTVIUIEventFrame(msg_id="m1", event="nav_click", payload={"view": "home"})
+        self.assertEqual(frame.msg_id, "m1")
+        self.assertEqual(frame.event, "nav_click")
+        self.assertEqual(frame.payload, {"view": "home"})
 
 
 if __name__ == "__main__":

@@ -299,7 +299,7 @@ class RTVIProcessor(FrameProcessor):
                     await self.push_frame(
                         RTVIUIEventFrame(
                             msg_id=message.id,
-                            event_name=event_data.name,
+                            event=event_data.event,
                             payload=event_data.payload,
                         )
                     )

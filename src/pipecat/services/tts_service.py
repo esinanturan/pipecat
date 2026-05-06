@@ -883,6 +883,16 @@ class TTSService(AIService):
         self._turn_context_id = None
         self._word_last_pts = 0
         self._create_audio_context_task()
+        # When pause_frame_processing=True, the process task may be blocked at
+        # __process_event.wait() because pause_processing_frames() was called
+        # after LLMFullResponseEndFrame and an UninterruptibleFrame was dequeued
+        # before the interrupt arrived. _start_interruption() in the base class
+        # handles the common case (non-uninterruptible frames) by cancelling and
+        # recreating the process task. But when _start_interruption() detects an
+        # UninterruptibleFrame it only resets the queue, leaving the process task
+        # blocked. BotStoppedSpeakingFrame never arrives (no audio played), so we
+        # must resume here to prevent a permanent deadlock.
+        await self._maybe_resume_frame_processing()
 
     async def _maybe_pause_frame_processing(self):
         if self._processing_text and self._pause_frame_processing:

@@ -174,10 +174,9 @@ class DeepgramFluxSTTBase(STTService):
             tag: Tags to label requests for identification during usage reporting.
             should_interrupt: Whether to interrupt the bot when Flux detects that
                 the user is speaking.
-            watchdog_min_timeout: Minimum silence duration in seconds before the
-                watchdog sends a silence packet to prevent dangling turns. The
-                actual threshold is ``max(chunk_duration * 2, watchdog_min_timeout)``.
-                Defaults to 0.5.
+            watchdog_min_timeout: minimum idle timeout before sending silence to
+                prevent dangling turns. The actual threshold is
+                ``max(chunk_duration * 2, watchdog_min_timeout)``. Defaults to 0.5.
             settings: Fully resolved settings instance (built by concrete subclass).
             **kwargs: Additional arguments passed to the parent STTService (e.g.
                 ``sample_rate``, ``reconnect_on_error``).

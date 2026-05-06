@@ -162,6 +162,7 @@ class DeepgramFluxSTTBase(STTService):
         mip_opt_out: bool | None = None,
         tag: list | None = None,
         should_interrupt: bool = True,
+        watchdog_min_timeout: float = 0.5,
         settings: Settings,
         **kwargs,
     ):
@@ -173,6 +174,10 @@ class DeepgramFluxSTTBase(STTService):
             tag: Tags to label requests for identification during usage reporting.
             should_interrupt: Whether to interrupt the bot when Flux detects that
                 the user is speaking.
+            watchdog_min_timeout: Minimum silence duration in seconds before the
+                watchdog sends a silence packet to prevent dangling turns. The
+                actual threshold is ``max(chunk_duration * 2, watchdog_min_timeout)``.
+                Defaults to 0.5.
             settings: Fully resolved settings instance (built by concrete subclass).
             **kwargs: Additional arguments passed to the parent STTService (e.g.
                 ``sample_rate``, ``reconnect_on_error``).
@@ -183,6 +188,7 @@ class DeepgramFluxSTTBase(STTService):
         self._mip_opt_out = mip_opt_out
         self._tag = tag or []
         self._should_interrupt = should_interrupt
+        self._watchdog_min_timeout = watchdog_min_timeout
 
         # Connection readiness: Flux sends a "Connected" message when ready
         self._connection_established_event = asyncio.Event()
@@ -294,9 +300,15 @@ class DeepgramFluxSTTBase(STTService):
             now = time.monotonic()
             # Send silence if we go more than 500 ms or twice the chunk size
             # without sending new audio to Flux.
-            threshold = max(self._last_audio_chunk_duration * 2, 0.5)
-            if self._user_is_speaking and self._last_stt_time and now - self._last_stt_time > threshold:
-                logger.warning(f"No audio received for {threshold * 1000:.0f} ms. Sending silence to Flux to prevent a dangling task")
+            threshold = max(self._last_audio_chunk_duration * 2, self._watchdog_min_timeout)
+            if (
+                self._user_is_speaking
+                and self._last_stt_time
+                and now - self._last_stt_time > threshold
+            ):
+                logger.warning(
+                    f"No audio received for {threshold * 1000:.0f} ms. Sending silence to Flux to prevent a dangling task"
+                )
                 try:
                     await self._send_silence()
                 except Exception as e:

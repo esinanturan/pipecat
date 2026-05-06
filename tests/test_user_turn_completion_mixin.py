@@ -12,7 +12,7 @@ from pipecat.frames.frames import (
     LLMFullResponseEndFrame,
     LLMMarkerFrame,
     LLMTextFrame,
-    UserTurnCompletedFrame,
+    UserTurnInferenceCompletedFrame,
 )
 from pipecat.processors.frame_processor import FrameProcessor
 from pipecat.services.llm_service import LLMService
@@ -61,8 +61,8 @@ class TestUserUserTurnCompletionLLMServiceMixin(unittest.IsolatedAsyncioTestCase
         self.assertEqual(marker_frames[0].marker, USER_TURN_COMPLETE_MARKER)
         self.assertFalse(marker_frames[0].append_to_context_immediately)
 
-        # UserTurnCompletedFrame broadcast in both directions.
-        completed = [f for f in pushed_frames if isinstance(f, UserTurnCompletedFrame)]
+        # UserTurnInferenceCompletedFrame broadcast in both directions.
+        completed = [f for f in pushed_frames if isinstance(f, UserTurnInferenceCompletedFrame)]
         self.assertEqual(len(completed), 2)
 
     async def test_incomplete_short_marker_suppresses_text(self):
@@ -87,8 +87,8 @@ class TestUserUserTurnCompletionLLMServiceMixin(unittest.IsolatedAsyncioTestCase
         self.assertEqual(marker_frames[0].marker, USER_TURN_INCOMPLETE_SHORT_MARKER)
         self.assertTrue(marker_frames[0].append_to_context_immediately)
 
-        # Incomplete markers do not emit UserTurnCompletedFrame.
-        completed = [f for f in pushed_frames if isinstance(f, UserTurnCompletedFrame)]
+        # Incomplete markers do not emit UserTurnInferenceCompletedFrame.
+        completed = [f for f in pushed_frames if isinstance(f, UserTurnInferenceCompletedFrame)]
         self.assertEqual(len(completed), 0)
 
     async def test_incomplete_long_marker_suppresses_text(self):
@@ -112,7 +112,7 @@ class TestUserUserTurnCompletionLLMServiceMixin(unittest.IsolatedAsyncioTestCase
         self.assertEqual(marker_frames[0].marker, USER_TURN_INCOMPLETE_LONG_MARKER)
         self.assertTrue(marker_frames[0].append_to_context_immediately)
 
-        completed = [f for f in pushed_frames if isinstance(f, UserTurnCompletedFrame)]
+        completed = [f for f in pushed_frames if isinstance(f, UserTurnInferenceCompletedFrame)]
         self.assertEqual(len(completed), 0)
 
     async def test_text_buffered_until_marker_found(self):
@@ -135,7 +135,7 @@ class TestUserUserTurnCompletionLLMServiceMixin(unittest.IsolatedAsyncioTestCase
         await processor._push_turn_text(f" {USER_TURN_COMPLETE_MARKER} How are you?")
 
         # One LLMTextFrame for the spoken portion; one LLMMarkerFrame for
-        # the marker; UserTurnCompletedFrame broadcast in both directions.
+        # the marker; UserTurnInferenceCompletedFrame broadcast in both directions.
         text_frames = [f for f in pushed_frames if isinstance(f, LLMTextFrame)]
         self.assertEqual(len(text_frames), 1)
         marker_frames = [f for f in pushed_frames if isinstance(f, LLMMarkerFrame)]

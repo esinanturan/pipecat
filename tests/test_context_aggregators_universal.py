@@ -570,7 +570,7 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
 
     async def test_inference_triggered_event_fires_on_default_strategies(self):
         """Default flow fires inference-triggered before stopped, both with the same strategy."""
-        from pipecat.frames.frames import UserTurnCompletedFrame  # noqa: F401
+        from pipecat.frames.frames import UserTurnInferenceCompletedFrame  # noqa: F401
 
         context = LLMContext()
         user_aggregator = LLMUserAggregator(
@@ -649,8 +649,8 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(stop_strategies[1], LLMTurnCompletionUserTurnStopStrategy)
 
     async def test_llm_completion_strategy_finalizes_on_complete_marker(self):
-        """LLMTurnCompletionUserTurnStopStrategy finalizes only on UserTurnCompletedFrame(complete)."""
-        from pipecat.frames.frames import UserTurnCompletedFrame
+        """LLMTurnCompletionUserTurnStopStrategy finalizes only on UserTurnInferenceCompletedFrame(complete)."""
+        from pipecat.frames.frames import UserTurnInferenceCompletedFrame
         from pipecat.turns.user_stop import LLMTurnCompletionUserTurnStopStrategy, deferred
 
         gating = LLMTurnCompletionUserTurnStopStrategy()
@@ -678,7 +678,7 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
         pipeline = Pipeline([user_aggregator])
 
         # Drive the pipeline. Inference fires after the upstream
-        # strategy's timeout. Stop fires only when UserTurnCompletedFrame
+        # strategy's timeout. Stop fires only when UserTurnInferenceCompletedFrame
         # arrives (producer absence == "not yet complete").
         frames_to_send = [
             VADUserStartedSpeakingFrame(),
@@ -687,7 +687,7 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
             VADUserStoppedSpeakingFrame(),
             SleepFrame(sleep=TRANSCRIPTION_TIMEOUT + 0.1),
             # At this point inference_triggered should have fired but NOT stopped.
-            UserTurnCompletedFrame(),
+            UserTurnInferenceCompletedFrame(),
             SleepFrame(),
         ]
         await run_test(pipeline, frames_to_send=frames_to_send)
@@ -703,7 +703,7 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
         and the conversation context should reflect the full user
         utterance, not just the segment from the last inference.
         """
-        from pipecat.frames.frames import UserTurnCompletedFrame
+        from pipecat.frames.frames import UserTurnInferenceCompletedFrame
         from pipecat.turns.user_stop import LLMTurnCompletionUserTurnStopStrategy, deferred
 
         gating = LLMTurnCompletionUserTurnStopStrategy()
@@ -747,8 +747,8 @@ class TestLLMUserAggregator(unittest.IsolatedAsyncioTestCase):
             VADUserStoppedSpeakingFrame(),
             SleepFrame(sleep=TRANSCRIPTION_TIMEOUT + 0.1),
             # Second inference fired here. Now the LLM returns ✓ and the
-            # turn finalizes via UserTurnCompletedFrame.
-            UserTurnCompletedFrame(),
+            # turn finalizes via UserTurnInferenceCompletedFrame.
+            UserTurnInferenceCompletedFrame(),
             SleepFrame(),
         ]
         await run_test(pipeline, frames_to_send=frames_to_send)

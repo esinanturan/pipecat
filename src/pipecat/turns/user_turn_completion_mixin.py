@@ -26,7 +26,7 @@ from pipecat.frames.frames import (
     LLMMessagesAppendFrame,
     LLMRunFrame,
     LLMTextFrame,
-    UserTurnCompletedFrame,
+    UserTurnInferenceCompletedFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
@@ -404,7 +404,7 @@ class UserTurnCompletionLLMServiceMixin(FrameProcessor):
             )
             self._turn_suppressed = True
 
-            # No UserTurnCompletedFrame is broadcast here: the turn is
+            # No UserTurnInferenceCompletedFrame is broadcast here: the turn is
             # explicitly not complete. The re-prompt path is driven by
             # this mixin's own timeout.
 
@@ -427,7 +427,7 @@ class UserTurnCompletionLLMServiceMixin(FrameProcessor):
             # LLMTurnCompletionUserTurnStopStrategy) can fire
             # `on_user_turn_stopped`. Must fire before the marker so
             # downstream consumers see the signal before the response.
-            await self.broadcast_frame(UserTurnCompletedFrame)
+            await self.broadcast_frame(UserTurnInferenceCompletedFrame)
 
             # Push the marker as a sideband signal that the assistant
             # aggregator will prepend to the upcoming aggregated text,

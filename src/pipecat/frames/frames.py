@@ -1005,7 +1005,7 @@ class UserSpeakingFrame(SystemFrame):
 
 
 @dataclass
-class UserTurnCompletedFrame(SystemFrame):
+class UserTurnInferenceCompletedFrame(SystemFrame):
     """Frame indicating that the user turn is semantically complete.
 
     Emitted by any component that can judge conversational turn

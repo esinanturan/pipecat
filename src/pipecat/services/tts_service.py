@@ -50,6 +50,7 @@ from pipecat.services.ai_service import AIService
 from pipecat.services.settings import TTSSettings, is_given
 from pipecat.services.websocket_service import WebsocketService
 from pipecat.transcriptions.language import Language
+from pipecat.utils.frame_queue import FrameQueue
 from pipecat.utils.text.base_text_filter import BaseTextFilter
 from pipecat.utils.text.simple_text_aggregator import SimpleTextAggregator
 from pipecat.utils.time import seconds_to_nanoseconds
@@ -324,6 +325,20 @@ class TTSService(AIService):
         self._turn_context_id: str | None = None
         self._audio_contexts: dict[str, asyncio.Queue] = {}
         self._audio_context_task: asyncio.Task | None = None
+
+        # Single FIFO queue that serializes everything the TTS service emits downstream.
+        # Items can be:
+        #   str   – an audio context ID: process the per-context audio queue in full before
+        #           moving on (see _handle_audio_context).
+        #   Frame – a non-system downstream frame (e.g. AggregatedTextFrame, FooFrame) that
+        #           must be emitted in-order relative to surrounding audio contexts.
+        #   None  – shutdown sentinel (sent by stop()).
+        # Created once here so it survives interruptions: on interruption we call reset()
+        # which drops non-UninterruptibleFrame items while keeping uninterruptible ones
+        # (e.g. FunctionCallResultFrame) that must not be lost mid-flight.
+        self._serialization_queue: FrameQueue = FrameQueue(
+            frame_getter=lambda item: item if isinstance(item, Frame) else None
+        )
 
         self._register_event_handler("on_connected")
         self._register_event_handler("on_disconnected")
@@ -875,6 +890,9 @@ class TTSService(AIService):
         await self.reset_word_timestamps()
 
         await self._stop_audio_context_task()
+        # Drops non-UninterruptibleFrame items while keeping uninterruptible ones
+        # (e.g. FunctionCallResultFrame) that must not be lost mid-flight.
+        self._serialization_queue.reset()
         audio_contexts = self.get_audio_contexts()
         if audio_contexts:
             for ctx_id in audio_contexts:
@@ -1298,14 +1316,6 @@ class TTSService(AIService):
 
     def _create_audio_context_task(self):
         if not self._audio_context_task:
-            # Single FIFO queue that serializes everything the TTS service emits downstream.
-            # Items can be:
-            #   str   – an audio context ID: process the per-context audio queue in full before
-            #           moving on (see _handle_audio_context).
-            #   Frame – a non-system downstream frame (e.g. AggregatedTextFrame, FooFrame) that
-            #           must be emitted in-order relative to surrounding audio contexts.
-            #   None  – shutdown sentinel (sent by stop()).
-            self._serialization_queue: asyncio.Queue = asyncio.Queue()
             self._audio_contexts: dict[str, asyncio.Queue] = {}
             self._audio_context_task = self.create_task(self._audio_context_task_handler())
 

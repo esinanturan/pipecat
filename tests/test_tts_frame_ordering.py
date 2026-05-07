@@ -852,5 +852,108 @@ async def test_no_deadlock_on_interrupt_before_audio_with_uninterruptible():
     )
 
 
+# ---------------------------------------------------------------------------
+# Serialization queue interruption tests
+# ---------------------------------------------------------------------------
+
+
+class MockBlockingWebSocketTTSService(TTSService):
+    """WebSocket TTS that creates an audio context but never delivers audio.
+
+    The audio context consumer blocks indefinitely on the per-context queue,
+    allowing subsequent frames to accumulate in the serialization queue.
+    pause_frame_processing=False so frames after TTSSpeakFrame enter the
+    serialization queue directly rather than stalling in the FrameProcessor.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(
+            push_start_frame=True,
+            push_text_frames=False,
+            pause_frame_processing=False,
+            sample_rate=_SAMPLE_RATE,
+            **kwargs,
+        )
+
+    def can_generate_metrics(self) -> bool:
+        return False
+
+    async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame, None]:
+        if False:
+            yield
+
+
+@pytest.mark.asyncio
+async def test_serialization_queue_drops_regular_frames_on_interruption():
+    """Regular frames in the serialization queue are dropped on interruption.
+
+    While the audio context consumer is blocked (no audio delivered), a FooFrame
+    enters the serialization queue. When InterruptionFrame arrives, the queue is
+    reset and the FooFrame must not appear downstream.
+    """
+    tts = MockBlockingWebSocketTTSService()
+
+    frames_to_send = [
+        TTSSpeakFrame(text="hello", append_to_context=False),
+        SleepFrame(sleep=0.05),  # let audio context task start blocking
+        FooFrame(label="will_be_dropped"),
+        SleepFrame(sleep=0.05),  # let FooFrame enter the serialization queue
+        InterruptionFrame(),
+        SleepFrame(sleep=0.1),  # let interruption handling complete
+    ]
+
+    frames_received = await asyncio.wait_for(
+        run_test(tts, frames_to_send=frames_to_send),
+        timeout=5.0,
+    )
+
+    down = frames_received[0]
+    foo_frames = [f for f in down if isinstance(f, FooFrame)]
+    assert len(foo_frames) == 0, (
+        f"FooFrame should be dropped on interruption, but {len(foo_frames)} arrived downstream"
+    )
+
+
+@pytest.mark.asyncio
+async def test_serialization_queue_preserves_uninterruptible_frames_on_interruption():
+    """Uninterruptible frames in the serialization queue survive interruption.
+
+    While the audio context consumer is blocked, both a regular FooFrame and an
+    UninterruptibleMarkerFrame enter the serialization queue. When InterruptionFrame
+    arrives, reset() drops FooFrame but keeps UninterruptibleMarkerFrame, which
+    the new audio context task then pushes downstream.
+    """
+    tts = MockBlockingWebSocketTTSService()
+
+    frames_to_send = [
+        TTSSpeakFrame(text="hello", append_to_context=False),
+        SleepFrame(sleep=0.05),  # let audio context task start blocking
+        FooFrame(label="will_be_dropped"),
+        UninterruptibleMarkerFrame(label="must_survive"),
+        SleepFrame(sleep=0.05),  # let frames enter the serialization queue
+        InterruptionFrame(),
+        SleepFrame(sleep=0.1),  # let interruption handling and new task run
+    ]
+
+    frames_received = await asyncio.wait_for(
+        run_test(tts, frames_to_send=frames_to_send),
+        timeout=5.0,
+    )
+
+    down = frames_received[0]
+
+    foo_frames = [f for f in down if isinstance(f, FooFrame)]
+    assert len(foo_frames) == 0, (
+        f"FooFrame should be dropped on interruption, but {len(foo_frames)} arrived downstream"
+    )
+
+    uninterruptible_frames = [f for f in down if isinstance(f, UninterruptibleMarkerFrame)]
+    assert len(uninterruptible_frames) == 1, (
+        f"UninterruptibleMarkerFrame must survive interruption, "
+        f"but {len(uninterruptible_frames)} arrived downstream"
+    )
+    assert uninterruptible_frames[0].label == "must_survive"
+
+
 if __name__ == "__main__":
     unittest.main()

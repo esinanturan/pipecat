@@ -138,7 +138,7 @@ class FilterIncompleteUserTurnStrategies(UserTurnStrategies):
         user_turn_strategies=FilterIncompleteUserTurnStrategies(
             config=UserTurnCompletionConfig(
                 incomplete_short_timeout=5.0,
-                incomplete_long_timeout=15.0,
+                incomplete_long_timeout=10.0,
             ),
         )
     """

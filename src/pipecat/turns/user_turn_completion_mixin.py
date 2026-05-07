@@ -187,8 +187,8 @@ class UserTurnCompletionLLMServiceMixin(FrameProcessor):
     It processes turn completion markers to enable smarter conversation flow:
 
     - ✓ (COMPLETE): Push response normally
-    - ○ (INCOMPLETE SHORT): Suppress response, wait ~5s, then prompt
-    - ◐ (INCOMPLETE LONG): Suppress response, wait ~15s, then prompt
+    - ○ (INCOMPLETE SHORT): Suppress response, wait 5s, then prompt
+    - ◐ (INCOMPLETE LONG): Suppress response, wait 10s, then prompt
 
     When incomplete timeouts expire, the mixin automatically prompts the LLM
     with a contextual follow-up message to re-engage the user.

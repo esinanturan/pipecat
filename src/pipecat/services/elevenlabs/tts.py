@@ -660,6 +660,7 @@ class ElevenLabsTTSService(WebsocketTTSService):
             if audio_contexts:
                 for ctx_id in audio_contexts:
                     await self._close_context(ctx_id)
+                    self._reset_alignment_state(ctx_id)
 
         if not url_changed:
             # Reconnect applies all settings; only warn about fields not handled
@@ -815,6 +816,8 @@ class ElevenLabsTTSService(WebsocketTTSService):
                 )
             except Exception as e:
                 await self.push_error(error_msg=f"Unknown error occurred: {e}", exception=e)
+
+    def _reset_alignment_state(self, context_id: str):
         self._cumulative_time = 0.0
         self._partial_word = ""
         self._partial_word_start_time = 0.0
@@ -823,7 +826,13 @@ class ElevenLabsTTSService(WebsocketTTSService):
     async def on_audio_context_interrupted(self, context_id: str):
         """Close the ElevenLabs context when the bot is interrupted."""
         await self._close_context(context_id)
+        self._reset_alignment_state(context_id)
         await super().on_audio_context_interrupted(context_id)
+
+    async def on_audio_context_completed(self, context_id: str):
+        """Reset alignment state after all audio for the context has played."""
+        self._reset_alignment_state(context_id)
+        await super().on_audio_context_completed(context_id)
 
     async def on_turn_context_completed(self):
         """Close the server-side context at end of turn.
